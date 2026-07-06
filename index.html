@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#0b0e1a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="format-detection" content="telephone=no" />
+    <title>Vocab Notebook</title>
+    <link rel="stylesheet" href="css/all.min.css" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body data-theme="dark">
+    <div class="bg-glow" aria-hidden="true"></div>
+    <div class="app">
+      <!-- Header -->
+      <header class="topbar">
+        <div class="topbar-title">
+          <div class="logo-icon"><i class="fa-solid fa-layer-group"></i></div>
+          <div>
+            <h1>Vocab <span class="accent-word">Notebook</span></h1>
+            <p>Words &amp; sentences, saved from anywhere</p>
+          </div>
+        </div>
+        <button class="icon-btn" id="themeToggle" title="Toggle dark / light mode">
+          <i class="fa-solid fa-moon"></i>
+        </button>
+      </header>
+
+      <!-- Home tab -->
+      <section class="view" id="view-home">
+        <div class="stats-strip" id="statsStrip">
+          <div class="stat-chip">
+            <span class="stat-num" id="statTotal">0</span>
+            <span class="stat-lbl">Saved</span>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-num" id="statMastered">0</span>
+            <span class="stat-lbl">Mastered</span>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-num" id="statDue">0</span>
+            <span class="stat-lbl">Due now</span>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-num" id="statStreak">0<i class="fa-solid fa-fire"></i></span>
+            <span class="stat-lbl">Day streak</span>
+          </div>
+        </div>
+
+        <div class="search-bar">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="searchInput" placeholder="Search your words and sentences…" />
+        </div>
+
+        <div class="filter-chips" id="filterChips">
+          <button class="chip active" data-filter="all">All</button>
+          <button class="chip" data-filter="word">Words</button>
+          <button class="chip" data-filter="sentence">Sentences</button>
+          <button class="chip" data-filter="fav">Favorates <i class="fa-solid fa-star"></i></button>
+        </div>
+
+        <div class="entry-list" id="entryList"><!-- Filled dynamically --></div>
+
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon"><i class="fa-solid fa-book-open"></i></div>
+          <p>Start your English vocabulary journey!</p>
+          <p>Tap <b>+</b> to add your first word or sentence from anywhere.</p>
+        </div>
+      </section>
+
+      <!-- Review tab -->
+      <section class="view hidden" id="view-review">
+        <div class="review-wrap" id="reviewWrap">
+          <div class="review-empty" id="reviewEmpty">
+            <div class="empty-icon"><i class="fa-solid fa-mug-hot"></i></div>
+            <p>All caught up!</p>
+            <p>Add a few words first, or come back later for your next review.</p>
+          </div>
+
+          <div class="rcard-stage" id="rcardStage">
+            <div class="swipe-hint swipe-hint-left"><i class="fa-solid fa-rotate-left"></i></div>
+            <div class="swipe-hint swipe-hint-right"><i class="fa-solid fa-circle-check"></i></div>
+            <div class="rcard" id="rcard">
+              <span class="rtag" id="rTag">Word</span>
+              <div class="rtext eng" id="rText">word</div>
+              <div class="rtrans" id="rTrans">translation</div>
+              <div class="rvoice-row">
+                <button class="voice-btn" id="rSpeakBtn"><i class="fa-solid fa-volume-high"></i> Listen</button>
+                <select id="rVoiceSelect" class="voice-select">
+                  <option value="default">Default voice</option>
+                </select>
+                <div class="voice-controls">
+                  <button class="mini-btn" id="rateDown" title="Slow down"><i class="fa-solid fa-backward-step"></i></button>
+                  <span class="rate-display" id="rateDisplay">Normal</span>
+                  <button class="mini-btn" id="rateUp" title="Speed up"><i class="fa-solid fa-forward-step"></i></button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="swipe-tip">Swipe the card — left for later, right for got it <i class="fa-solid fa-hand-pointer"></i></p>
+
+          <div class="review-controls">
+            <button class="btn btn-review" id="rSkipBtn"><i class="fa-solid fa-rotate-left"></i> Later</button>
+            <button class="btn btn-know" id="rKnowBtn"><i class="fa-solid fa-circle-check"></i> Got it</button>
+          </div>
+
+          <!-- Quality buttons (0-5) for spaced repetition -->
+          <div class="quality-rating">
+            <div class="quality-label">How did that review go?</div>
+            <div class="quality-buttons">
+              <button class="quality-btn" id="quality0" title="Completely forgot"><i class="fa-solid fa-face-sad-tear"></i> Forgot</button>
+              <button class="quality-btn" id="quality1" title="Very hard"><i class="fa-solid fa-face-frown"></i> Hard</button>
+              <button class="quality-btn" id="quality2" title="Good recall"><i class="fa-solid fa-face-smile"></i> Good</button>
+              <button class="quality-btn" id="quality3" title="Excellent"><i class="fa-solid fa-face-grin-stars"></i> Great</button>
+              <button class="quality-btn" id="quality4" title="Easy"><i class="fa-solid fa-face-laugh-beam"></i> Easy</button>
+              <button class="quality-btn" id="quality5" title="Very easy"><i class="fa-solid fa-face-grin-wide"></i> Very easy</button>
+            </div>
+          </div>
+          <div class="review-progress" id="reviewProgress"></div>
+        </div>
+      </section>
+
+      <!-- Stats tab -->
+      <section class="view hidden" id="view-stats">
+        <h2 class="section-title">Your progress</h2>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-card-num" id="sTotal">0</div>
+            <div class="stat-card-lbl">Total entries</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-num" id="sWords">0</div>
+            <div class="stat-card-lbl">Words</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-num" id="sSentences">0</div>
+            <div class="stat-card-lbl">Sentences</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-num" id="sFav">0</div>
+            <div class="stat-card-lbl">Favorites</div>
+          </div>
+          <div class="stat-card accent">
+            <div class="stat-card-num" id="sMastered">0</div>
+            <div class="stat-card-lbl">Mastered</div>
+          </div>
+          <div class="stat-card accent">
+            <div class="stat-card-num" id="sStreak">0</div>
+            <div class="stat-card-lbl">Day streak</div>
+          </div>
+        </div>
+
+        <h3 class="section-subtitle">Added this week</h3>
+        <div class="chart-card">
+          <div class="bar-chart" id="barChart"><!-- Filled dynamically --></div>
+        </div>
+      </section>
+
+      <!-- Floating add button -->
+      <button class="fab" id="fabAdd" title="Add a word or sentence">
+        <i class="fa-solid fa-plus"></i>
+      </button>
+
+      <!-- Bottom nav -->
+      <nav class="bottom-nav">
+        <button class="nav-item active" data-view="home"><i class="fa-solid fa-house"></i><span>Home</span></button>
+        <button class="nav-item" data-view="review"><i class="fa-solid fa-layer-group"></i><span>Review</span></button>
+        <button class="nav-item" data-view="stats"><i class="fa-solid fa-chart-simple"></i><span>Stats</span></button>
+      </nav>
+
+      <!-- Add sheet (bottom sheet) -->
+      <div class="sheet-overlay" id="sheetOverlay">
+        <div class="sheet" id="addSheet">
+          <div class="sheet-handle"></div>
+          <h2 id="sheetTitle">Add new</h2>
+
+          <label class="field-label">Word or sentence (English)</label>
+          <textarea id="inputText" rows="2" placeholder="Type or paste the word or sentence…"></textarea>
+
+          <div class="type-selector">
+            <label class="field-label">Type:</label>
+            <div class="type-options">
+              <label class="type-option">
+                <input type="radio" name="entryType" value="word" checked />
+                <span class="type-label">Word</span>
+              </label>
+              <label class="type-option">
+                <input type="radio" name="entryType" value="sentence" />
+                <span class="type-label">Sentence</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="voice-selector">
+            <label class="field-label">Choose a voice:</label>
+            <select id="voiceSelect" class="voice-select"></select>
+          </div>
+
+          <label class="field-label">
+            Translation (automatic — feel free to edit)
+            <button class="mini-btn" id="retranslateBtn" title="Translate again"><i class="fa-solid fa-arrows-rotate"></i></button>
+          </label>
+          <textarea id="inputTranslation" rows="2" placeholder="The translation will appear here automatically…"></textarea>
+          <div class="translate-status" id="translateStatus"></div>
+
+          <div class="sheet-actions">
+            <button class="btn btn-secondary" id="cancelAddBtn">Cancel</button>
+            <button class="btn btn-know" id="saveEntryBtn"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edit sheet (bottom sheet) -->
+      <div class="sheet-overlay" id="editSheetOverlay">
+        <div class="sheet" id="editSheet">
+          <div class="sheet-handle"></div>
+          <h2>Edit entry</h2>
+
+          <label class="field-label">Word or sentence (English)</label>
+          <textarea id="editInputText" rows="2" placeholder="Type or paste the word or sentence…"></textarea>
+
+          <div class="type-selector">
+            <label class="field-label">Type:</label>
+            <div class="type-options">
+              <label class="type-option">
+                <input type="radio" name="editEntryType" value="word" />
+                <span class="type-label">Word</span>
+              </label>
+              <label class="type-option">
+                <input type="radio" name="editEntryType" value="sentence" />
+                <span class="type-label">Sentence</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="voice-selector">
+            <label class="field-label">Choose a voice:</label>
+            <select id="editVoiceSelect" class="voice-select"></select>
+          </div>
+
+          <label class="field-label">
+            Translation
+            <button class="mini-btn" id="editRetranslateBtn" title="Translate again"><i class="fa-solid fa-arrows-rotate"></i></button>
+          </label>
+          <textarea id="editInputTranslation" rows="2" placeholder="Enter the translation…"></textarea>
+          <div class="translate-status" id="editTranslateStatus"></div>
+
+          <div class="sheet-actions">
+            <button class="btn btn-secondary" id="cancelEditBtn">Cancel</button>
+            <button class="btn btn-know" id="updateEntryBtn"><i class="fa-solid fa-floppy-disk"></i> Update</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Small notification toast -->
+      <div class="toast" id="toast">
+        <span class="toast-msg" id="toastMsg"></span>
+        <button class="toast-action" id="toastAction"></button>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
