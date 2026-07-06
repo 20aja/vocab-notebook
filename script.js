@@ -25,7 +25,7 @@
     reviewIndex: 0,
     voices: [],
     speechRate: 0.8,
-    speechRates: [0.75, 1, 1.5], // 3 speeds: slow, normal, fast
+    speechRates: [0.5, 0.75, 1], // 3 speeds: slow, normal, fast
     currentSpeechRateIndex: 1, // default index for normal speed
   };
 
@@ -403,17 +403,21 @@
             <div class="entry-text eng" dir="ltr">${escapeHtml(e.text)}</div>
             <div class="entry-trans" dir="rtl">${escapeHtml(e.translation || "No translation")}</div>
           </div>
+        </div>
+        
+        <div class="actoins-badges">
           <div class="entry-actions">
             <button class="speak-mini" title="Listen"><i class="fa-solid fa-volume-high"></i></button>
             <button class="edit-mini" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
             <button class="fav-mini ${e.favorite ? "fav-active" : ""}" title="Favorite"><i class="fa-${e.favorite ? "solid" : "regular"} fa-star"></i></button>
             <button class="del-mini" title="Delete"><i class="fa-solid fa-trash"></i></button>
           </div>
-        </div>
         <div class="entry-badges">
           <span class="badge ${e.type}">${e.type === "word" ? "Word" : "Sentence"}</span>
-          ${e.mastered ? `<span class="badge mastered">Mastered ✓</span>` : ""}
+          ${e.mastered ? `<span class="badge mastered">✓</span>` : ""}
         </div>
+        </div>
+
       </div>`;
   }
 
@@ -699,12 +703,12 @@
 
     function onDown(ev) {
       if (state.reviewQueue.length === 0) return;
-      
+
       // تحقق مما إذا كان النقر على عنصر يجب ألا يسبب السحب
-      if (ev.target.closest('.voice-btn, .mini-btn, .voice-select, .voice-controls, select')) {
+      if (ev.target.closest(".voice-btn, .mini-btn, .voice-select, .voice-controls, select")) {
         return; /* لا تبدأ السحب عند النقر على أزرار الصوت أو التحكم في السرعة */
       }
-      
+
       dragging = true;
       pointerId = ev.pointerId;
       card.setPointerCapture(pointerId);
@@ -758,6 +762,7 @@
   }
 
   /** ------------ Stats dashboard ------------ **/
+
   function refreshStats() {
     const total = state.entries.length;
     const words = state.entries.filter((e) => e.type === "word").length;
@@ -893,6 +898,7 @@
       document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
       chip.classList.add("active");
       state.filter = chip.dataset.filter;
+
       renderList();
     });
 
@@ -983,3 +989,15 @@
   bindEvents();
   renderList();
 })();
+
+
+  /** ------------ Other Events ------------ **/
+document.querySelector(".hid-fab").addEventListener("click", () => {
+  document.querySelector(".fab").style.display = "none";
+});
+document.querySelector(".hid-faab").addEventListener("click", () => {
+  document.querySelector(".fab").style.display = "none";
+});
+document.querySelector(".shw-fab").addEventListener("click", () => {
+  document.querySelector(".fab").style.display = "block";
+});
