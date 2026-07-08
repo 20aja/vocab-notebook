@@ -3,7 +3,7 @@
  * App logic for saving learned words and sentences from any source.
  * Includes: local storage, automatic translation (MyMemory API), multi-voice
  * speech, spaced-repetition review with swipe gestures, a stats dashboard,
- * search & filters, and JSON backup export/import.
+ * search & filters.
  */
 
 (function () {
@@ -45,13 +45,20 @@
     inputText: document.getElementById("inputText"),
     inputTranslation: document.getElementById("inputTranslation"),
     translateStatus: document.getElementById("translateStatus"),
+    tagsInput: document.getElementById("tagsInput"),
+    sourceInput: document.getElementById("sourceInput"),
+    notesInput: document.getElementById("notesInput"),
     retranslateBtn: document.getElementById("retranslateBtn"),
     saveEntryBtn: document.getElementById("saveEntryBtn"),
     cancelAddBtn: document.getElementById("cancelAddBtn"),
     sheetTitle: document.getElementById("sheetTitle"),
 
     voiceSelect: document.getElementById("voiceSelect"),
+    voiceInputBtn: document.getElementById("voiceInputBtn"),
     editVoiceSelect: document.getElementById("editVoiceSelect"),
+    editTagsInput: document.getElementById("editTagsInput"),
+    editSourceInput: document.getElementById("editSourceInput"),
+    editNotesInput: document.getElementById("editNotesInput"),
 
     editRetranslateBtn: document.getElementById("editRetranslateBtn"),
     editInputText: document.getElementById("editInputText"),
@@ -74,17 +81,23 @@
     rTag: document.getElementById("rTag"),
     rText: document.getElementById("rText"),
     rTrans: document.getElementById("rTrans"),
+    rMeta: document.getElementById("rMeta"),
     rSpeakBtn: document.getElementById("rSpeakBtn"),
     rVoiceSelect: document.getElementById("rVoiceSelect"),
     rSkipBtn: document.getElementById("rSkipBtn"),
     rKnowBtn: document.getElementById("rKnowBtn"),
     reviewProgress: document.getElementById("reviewProgress"),
+    reviewDueCount: document.getElementById("reviewDueCount"),
+    nextReviewText: document.getElementById("nextReviewText"),
+    reviewUpcomingList: document.getElementById("reviewUpcomingList"),
     swipeHintLeft: document.querySelector(".swipe-hint-left"),
     swipeHintRight: document.querySelector(".swipe-hint-right"),
 
     rateDown: document.getElementById("rateDown"),
     rateUp: document.getElementById("rateUp"),
     rateDisplay: document.getElementById("rateDisplay"),
+    exportBtn: document.getElementById("exportBtn"),
+    importFile: document.getElementById("importFile"),
 
     // Home stats strip
     statTotal: document.getElementById("statTotal"),
@@ -100,8 +113,6 @@
     sMastered: document.getElementById("sMastered"),
     sStreak: document.getElementById("sStreak"),
     barChart: document.getElementById("barChart"),
-    exportBtn: document.getElementById("exportBtn"),
-    importFile: document.getElementById("importFile"),
 
     toast: document.getElementById("toast"),
     toastMsg: document.getElementById("toastMsg"),
@@ -172,13 +183,6 @@
       return 0;
     }
   }
-  function getStreakDays() {
-    try {
-      return JSON.parse(localStorage.getItem(STREAK_KEY) || '{"days":[]}').days;
-    } catch (e) {
-      return [];
-    }
-  }
 
   /** ------------ Auto-detect entry type ------------ **/
   function detectType(text) {
@@ -193,6 +197,14 @@
   function getSelectedEditType() {
     const checked = document.querySelector('input[name="editEntryType"]:checked');
     return checked ? checked.value : "word";
+  }
+
+  function parseTags(text) {
+    return text
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+      .map((tag) => tag.toLowerCase());
   }
 
   /** ------------ Auto-translate (MyMemory API - free, no key) ------------ **/
@@ -233,6 +245,73 @@
     const radioToSelect = document.querySelector(`input[name="editEntryType"][value="${detectedType}"]`);
     if (radioToSelect) radioToSelect.checked = true;
     translateTimer = setTimeout(() => autoTranslate(text, el.editInputTranslation, el.editTranslateStatus), 700);
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition || window.msSpeechRecognition;
+  let recognition = null;
+  let isListening = false;
+
+  function initSpeechRecognition() {
+    if (!SpeechRecognition || recognition) return;
+    recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.continuous = false;
+
+    recognition.onstart = () => {
+      isListening = true;
+      if (el.voiceInputBtn) {
+        el.voiceInputBtn.classList.add("listening");
+        el.voiceInputBtn.title = "Listening... tap to stop";
+      }
+    };
+
+    recognition.onend = () => {
+      isListening = false;
+      if (el.voiceInputBtn) {
+        el.voiceInputBtn.classList.remove("listening");
+        el.voiceInputBtn.title = "Speak your word or sentence";
+      }
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript.trim();
+      if (transcript) {
+        el.inputText.value = transcript;
+        scheduleAutoTranslate();
+        toast("Voice captured ✓ edit if needed");
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        toast("Microphone access denied.");
+      } else {
+        toast("Voice input is not available right now.");
+      }
+    };
+  }
+
+  function toggleVoiceInput() {
+    if (!SpeechRecognition) {
+      toast("Voice input is not supported in this browser.");
+      return;
+    }
+    initSpeechRecognition();
+    if (!recognition) {
+      toast("Voice recognition could not be initialized.");
+      return;
+    }
+    if (isListening) {
+      recognition.stop();
+      return;
+    }
+    try {
+      recognition.start();
+    } catch (error) {
+      toast("Unable to start voice input.");
+    }
   }
 
   /** ------------ Multi-voice speech ------------ **/
@@ -313,15 +392,56 @@
     return null;
   }
 
-  function speak(text, voiceSelectEl) {
-    if (!("speechSynthesis" in window)) {
-      toast("Your browser doesn't support text-to-speech.");
-      return;
+  // Fallback TTS used when the WebView (e.g. inside a converted APK) has no
+  // working speechSynthesis voices — plays audio from a cloud TTS endpoint instead.
+  let cloudTTSAudio = null;
+  function speakViaCloudTTS(text, lang, onStart, onEnd) {
+    try {
+      if (cloudTTSAudio) {
+        cloudTTSAudio.pause();
+        cloudTTSAudio = null;
+      }
+      const shortLang = (lang || "en-US").split("-")[0]; // Google TTS wants "en", not "en-US"
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(shortLang)}&q=${encodeURIComponent(text)}`;
+      const audio = new Audio(url);
+      cloudTTSAudio = audio;
+      audio.onplay = onStart;
+      audio.onended = onEnd;
+      audio.onerror = () => {
+        onEnd();
+        toast("Text-to-speech unavailable right now — check your internet connection.");
+      };
+      audio.play().catch(() => {
+        onEnd();
+        toast("Text-to-speech unavailable right now — check your internet connection.");
+      });
+    } catch (e) {
+      onEnd();
     }
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
+  }
+
+  function speak(text, voiceSelectEl) {
     const selectEl = voiceSelectEl || el.rVoiceSelect;
     const selectedVoice = getVoiceFromSelect(selectEl);
+    const lang = selectedVoice ? selectedVoice.lang : "en-US";
+
+    const resetIcon = () => {
+      if (el.rSpeakBtn) el.rSpeakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i> Listen';
+    };
+    const setSpeaking = () => {
+      if (el.rSpeakBtn) el.rSpeakBtn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop';
+    };
+
+    const hasBrowserVoices = "speechSynthesis" in window && window.speechSynthesis.getVoices().length > 0;
+
+    if (!hasBrowserVoices) {
+      // No usable native voices (typical inside a packaged APK/WebView) — use cloud fallback directly.
+      speakViaCloudTTS(text, lang, setSpeaking, resetIcon);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
     if (selectedVoice) {
       utter.voice = selectedVoice;
       utter.lang = selectedVoice.lang;
@@ -331,15 +451,22 @@
     utter.rate = state.speechRates[state.currentSpeechRateIndex];
     utter.pitch = 1;
     utter.volume = 1;
-    const resetIcon = () => {
-      if (el.rSpeakBtn) el.rSpeakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i> Listen';
-    };
-    utter.onstart = () => {
-      if (el.rSpeakBtn) el.rSpeakBtn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop';
-    };
+    utter.onstart = setSpeaking;
     utter.onend = resetIcon;
-    utter.onerror = resetIcon;
+    utter.onerror = () => {
+      // Native speech failed to actually speak (common in WebView) — fall back to cloud TTS.
+      speakViaCloudTTS(text, lang, setSpeaking, resetIcon);
+    };
     window.speechSynthesis.speak(utter);
+
+    // Safety net: some WebViews report voices and accept speak() but never actually
+    // produce sound or fire onerror. If nothing started within 400ms, use the fallback.
+    setTimeout(() => {
+      if (!window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        speakViaCloudTTS(text, lang, setSpeaking, resetIcon);
+      }
+    }, 400);
   }
 
   if ("speechSynthesis" in window) loadVoices();
@@ -375,7 +502,16 @@
     if (state.filter === "fav") items = items.filter((e) => e.favorite);
     if (state.search.trim()) {
       const q = state.search.trim().toLowerCase();
-      items = items.filter((e) => e.text.toLowerCase().includes(q) || (e.translation || "").toLowerCase().includes(q));
+      items = items.filter((e) => {
+        const tags = (e.tags || []).join(" ").toLowerCase();
+        return (
+          e.text.toLowerCase().includes(q) ||
+          (e.translation || "").toLowerCase().includes(q) ||
+          tags.includes(q) ||
+          (e.source || "").toLowerCase().includes(q) ||
+          (e.notes || "").toLowerCase().includes(q)
+        );
+      });
     }
 
     el.entryList.innerHTML = items.map(renderCard).join("");
@@ -396,12 +532,18 @@
   }
 
   function renderCard(e, i) {
+    const tagBadges = (e.tags || []).map((tag) => `<span class="tag-badge">${escapeHtml(tag)}</span>`).join("");
+    const sourceLine = e.source ? `<div class="entry-source">${escapeHtml(e.source)}</div>` : "";
+    const noteLine = e.notes ? `<div class="entry-note">${escapeHtml(e.notes)}</div>` : "";
     return `
       <div class="entry-card" data-id="${e.id}" style="animation-delay:${Math.min(i, 8) * 35}ms">
         <div class="entry-top">
           <div>
             <div class="entry-text eng" dir="ltr">${escapeHtml(e.text)}</div>
             <div class="entry-trans" dir="rtl">${escapeHtml(e.translation || "No translation")}</div>
+            ${sourceLine}
+            ${noteLine}
+            ${tagBadges ? `<div class="entry-tags">${tagBadges}</div>` : ""}
           </div>
         </div>
         
@@ -475,6 +617,9 @@
     if (!entry) return;
     el.editInputText.value = entry.text;
     el.editInputTranslation.value = entry.translation || "";
+    el.editTagsInput.value = (entry.tags || []).join(", ");
+    el.editSourceInput.value = entry.source || "";
+    el.editNotesInput.value = entry.notes || "";
     el.editTranslateStatus.textContent = "";
     const typeRadio = document.querySelector(`input[name="editEntryType"][value="${entry.type}"]`);
     if (typeRadio) typeRadio.checked = true;
@@ -487,6 +632,9 @@
     el.sheetOverlay.classList.remove("show");
     el.inputText.value = "";
     el.inputTranslation.value = "";
+    el.tagsInput.value = "";
+    el.sourceInput.value = "";
+    el.notesInput.value = "";
     el.translateStatus.textContent = "";
     const wordRadio = document.querySelector('input[name="entryType"][value="word"]');
     if (wordRadio) wordRadio.checked = true;
@@ -497,6 +645,9 @@
     delete el.updateEntryBtn.dataset.editId;
     el.editInputText.value = "";
     el.editInputTranslation.value = "";
+    el.editTagsInput.value = "";
+    el.editSourceInput.value = "";
+    el.editNotesInput.value = "";
     el.editTranslateStatus.textContent = "";
   }
 
@@ -511,6 +662,9 @@
       text,
       translation: el.inputTranslation.value.trim(),
       type: getSelectedType(),
+      tags: parseTags(el.tagsInput.value),
+      source: el.sourceInput.value.trim(),
+      notes: el.notesInput.value.trim(),
       favorite: false,
       mastered: false,
       createdAt: Date.now(),
@@ -539,7 +693,19 @@
     const newText = el.editInputText.value.trim();
     const newTranslation = el.editInputTranslation.value.trim();
     const newType = getSelectedEditType();
-    const hasChanges = newText !== state.entries[entryIndex].text || newTranslation !== (state.entries[entryIndex].translation || "") || newType !== state.entries[entryIndex].type;
+    const newTags = parseTags(el.editTagsInput.value);
+    const newSource = el.editSourceInput.value.trim();
+    const newNotes = el.editNotesInput.value.trim();
+    const oldEntry = state.entries[entryIndex];
+    const oldTags = oldEntry.tags || [];
+    const tagsChanged = newTags.join(",") !== oldTags.join(",");
+    const hasChanges =
+      newText !== oldEntry.text ||
+      newTranslation !== (oldEntry.translation || "") ||
+      newType !== oldEntry.type ||
+      tagsChanged ||
+      newSource !== (oldEntry.source || "") ||
+      newNotes !== (oldEntry.notes || "");
 
     if (!hasChanges) {
       toast("No changes made.");
@@ -547,25 +713,18 @@
       return;
     }
 
-    const oldFavorite = state.entries[entryIndex].favorite;
-    const oldMastered = state.entries[entryIndex].mastered;
-    const oldRepetitionData = state.repetitionData[editId];
-    state.entries.splice(entryIndex, 1);
-
     const updatedEntry = {
-      id: "e_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+      ...oldEntry,
       text: newText,
       translation: newTranslation,
       type: newType,
-      favorite: oldFavorite,
-      mastered: oldMastered,
-      createdAt: Date.now(),
+      tags: newTags,
+      source: newSource,
+      notes: newNotes,
     };
-    state.entries.push(updatedEntry);
-    if (oldRepetitionData) state.repetitionData[updatedEntry.id] = oldRepetitionData;
+    state.entries[entryIndex] = updatedEntry;
 
     saveEntries();
-    saveRepetitionData();
     closeEditSheet();
     renderList();
     toast("Updated ✓");
@@ -625,6 +784,51 @@
     }
   }
 
+  function getUpcomingReviewEntries() {
+    const now = Date.now();
+    return state.entries
+      .filter((entry) => {
+        const review = state.repetitionData[entry.id];
+        return review && review.nextReview > now;
+      })
+      .sort((a, b) => state.repetitionData[a.id].nextReview - state.repetitionData[b.id].nextReview)
+      .slice(0, 3);
+  }
+
+  function formatReviewDate(timestamp) {
+    const date = new Date(timestamp);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diff = Math.round((date - today) / 86400000);
+    if (diff === 0) return "Today";
+    if (diff === 1) return "Tomorrow";
+    return date.toLocaleDateString(undefined, {month: "short", day: "numeric"});
+  }
+
+  function renderReviewDetails() {
+    if (!el.reviewUpcomingList || !el.reviewDueCount || !el.nextReviewText) return;
+
+    const dueCount = getWordsForReview().length;
+    const upcoming = getUpcomingReviewEntries();
+    el.reviewDueCount.textContent = dueCount;
+    el.nextReviewText.textContent = upcoming.length ? formatReviewDate(state.repetitionData[upcoming[0].id].nextReview) : "No upcoming reviews";
+
+    if (upcoming.length === 0) {
+      el.reviewUpcomingList.innerHTML = `<div class="upcoming-empty">No scheduled reviews yet.</div>`;
+      return;
+    }
+
+    el.reviewUpcomingList.innerHTML = upcoming
+      .map((entry) => {
+        const nextReview = state.repetitionData[entry.id];
+        return `<div class="upcoming-item">
+            <div class="upcoming-text">${escapeHtml(entry.text)}</div>
+            <div class="upcoming-meta">${formatReviewDate(nextReview.nextReview)}</div>
+          </div>`;
+      })
+      .join("");
+  }
+
   function rateCurrentCard(quality) {
     const e = state.reviewQueue[state.reviewIndex];
     if (!e) return;
@@ -651,6 +855,8 @@
     document.querySelector(".quality-rating").style.display = total === 0 ? "none" : "block";
     if (total === 0) {
       el.reviewProgress.textContent = "";
+      if (el.rMeta) el.rMeta.textContent = "";
+      renderReviewDetails();
       return;
     }
 
@@ -659,6 +865,12 @@
     el.rTag.textContent = e.type === "word" ? "Word" : "Sentence";
     el.rText.textContent = e.text;
     el.rTrans.textContent = e.translation || "—";
+    if (el.rMeta) {
+      const parts = [];
+      if (e.source) parts.push(`Source: ${e.source}`);
+      if (e.notes) parts.push(`Note: ${e.notes}`);
+      el.rMeta.textContent = parts.join(" • ");
+    }
     el.rcard.style.transform = "";
     el.rcard.style.opacity = "";
 
@@ -674,6 +886,7 @@
       }
     }
     el.reviewProgress.textContent = `${state.reviewIndex + 1} / ${total} ${reviewInfo}`;
+    renderReviewDetails();
   }
 
   function reviewNext() {
@@ -816,6 +1029,141 @@
       .join("");
   }
 
+  /** ------------ Dark / light mode ------------ **/
+  function applyTheme(theme) {
+    document.body.setAttribute("data-theme", theme);
+    el.themeToggle.innerHTML = theme === "light" ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch (e) {}
+  }
+  function toggleTheme() {
+    const cur = document.body.getAttribute("data-theme");
+    applyTheme(cur === "light" ? "dark" : "light");
+    haptic(8);
+  }
+
+  /** ------------ Event bindings ------------ **/
+  function bindEvents() {
+    el.themeToggle.addEventListener("click", toggleTheme);
+
+    el.searchInput.addEventListener("input", (e) => {
+      state.search = e.target.value;
+      renderList();
+    });
+
+    el.filterChips.addEventListener("click", (e) => {
+      const chip = e.target.closest(".chip");
+      if (!chip) return;
+      document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
+      chip.classList.add("active");
+      state.filter = chip.dataset.filter;
+
+      renderList();
+    });
+
+    el.fabAdd.addEventListener("click", openSheet);
+    el.cancelAddBtn.addEventListener("click", closeSheet);
+    el.cancelEditBtn.addEventListener("click", closeEditSheet);
+    el.sheetOverlay.addEventListener("click", (e) => {
+      if (e.target === el.sheetOverlay) closeSheet();
+    });
+    el.editSheetOverlay.addEventListener("click", (e) => {
+      if (e.target === el.editSheetOverlay) closeEditSheet();
+    });
+    el.inputText.addEventListener("input", scheduleAutoTranslate);
+    el.editInputText.addEventListener("input", scheduleEditAutoTranslate);
+    if (el.voiceInputBtn) el.voiceInputBtn.addEventListener("click", toggleVoiceInput);
+    el.retranslateBtn.addEventListener("click", () => autoTranslate(el.inputText.value, el.inputTranslation, el.translateStatus));
+    el.editRetranslateBtn.addEventListener("click", () => autoTranslate(el.editInputText.value, el.editInputTranslation, el.editTranslateStatus));
+    el.saveEntryBtn.addEventListener("click", saveNewEntry);
+    el.updateEntryBtn.addEventListener("click", updateEntry);
+
+    el.bottomNav.addEventListener("click", (e) => {
+      const btn = e.target.closest(".nav-item");
+      if (btn) switchView(btn.dataset.view);
+    });
+
+    el.rSpeakBtn.addEventListener("click", () => {
+      const e = state.reviewQueue[state.reviewIndex];
+      if (e) speak(e.text, el.rVoiceSelect);
+    });
+    el.rSkipBtn.addEventListener("click", () => {
+      haptic(10);
+      reviewNext();
+    });
+    el.rKnowBtn.addEventListener("click", markMastered);
+
+    const qualityButtons = [
+      {id: "quality0", quality: 0},
+      {id: "quality1", quality: 1},
+      {id: "quality2", quality: 2},
+      {id: "quality3", quality: 3},
+      {id: "quality4", quality: 4},
+      {id: "quality5", quality: 5},
+    ];
+    qualityButtons.forEach((btn) => {
+      const btnEl = document.getElementById(btn.id);
+      if (btnEl) btnEl.addEventListener("click", () => rateCurrentCard(btn.quality));
+    });
+
+    if (el.rVoiceSelect) el.rVoiceSelect.addEventListener("change", saveVoiceSettings);
+    if (el.voiceSelect) el.voiceSelect.addEventListener("change", saveVoiceSettings);
+
+    if (el.rateDown) el.rateDown.addEventListener("click", () => adjustRate(-1));
+    if (el.rateUp) el.rateUp.addEventListener("click", () => adjustRate(1));
+    if (el.exportBtn) el.exportBtn.addEventListener("click", exportBackup);
+    if (el.importFile) {
+      el.importFile.addEventListener("change", (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (file) importBackup(file);
+        e.target.value = "";
+      });
+    }
+
+    initSwipe();
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        if (el.sheetOverlay.classList.contains("show")) closeSheet();
+        if (el.editSheetOverlay.classList.contains("show")) closeEditSheet();
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        openSheet();
+      }
+      if (event.key === "/" && document.activeElement !== el.searchInput) {
+        event.preventDefault();
+        el.searchInput.focus();
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        if (el.sheetOverlay.classList.contains("show")) saveNewEntry();
+        if (el.editSheetOverlay.classList.contains("show")) updateEntry();
+      }
+    });
+
+    function adjustRate(direction) {
+      const newIndex = state.currentSpeechRateIndex + direction;
+      if (newIndex >= 0 && newIndex < state.speechRates.length) {
+        state.currentSpeechRateIndex = newIndex;
+        const rateNames = ["Slow", "Normal", "Fast"];
+        el.rateDisplay.textContent = rateNames[state.currentSpeechRateIndex];
+        localStorage.setItem("vocabNotebook.speechRateIndex", state.currentSpeechRateIndex);
+      }
+    }
+
+    try {
+      const savedTheme = localStorage.getItem(THEME_KEY);
+      if (savedTheme) applyTheme(savedTheme);
+
+      const savedRateIndex = localStorage.getItem("vocabNotebook.speechRateIndex");
+      if (savedRateIndex !== null) state.currentSpeechRateIndex = parseInt(savedRateIndex);
+
+      const rateNames = ["Slow", "Normal", "Fast"];
+      if (el.rateDisplay) el.rateDisplay.textContent = rateNames[state.currentSpeechRateIndex];
+    } catch (e) {}
+  }
+
   /** ------------ Backup: export / import ------------ **/
   function exportBackup() {
     const payload = {
@@ -823,7 +1171,7 @@
       exportedAt: new Date().toISOString(),
       entries: state.entries,
       repetitionData: state.repetitionData,
-      streak: getStreakDays(),
+      streak: JSON.parse(localStorage.getItem(STREAK_KEY) || '{"days":[]}').days,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {type: "application/json"});
     const url = URL.createObjectURL(blob);
@@ -869,129 +1217,12 @@
     reader.readAsText(file);
   }
 
-  /** ------------ Dark / light mode ------------ **/
-  function applyTheme(theme) {
-    document.body.setAttribute("data-theme", theme);
-    el.themeToggle.innerHTML = theme === "light" ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
-    try {
-      localStorage.setItem(THEME_KEY, theme);
-    } catch (e) {}
-  }
-  function toggleTheme() {
-    const cur = document.body.getAttribute("data-theme");
-    applyTheme(cur === "light" ? "dark" : "light");
-    haptic(8);
-  }
-
-  /** ------------ Event bindings ------------ **/
-  function bindEvents() {
-    el.themeToggle.addEventListener("click", toggleTheme);
-
-    el.searchInput.addEventListener("input", (e) => {
-      state.search = e.target.value;
-      renderList();
-    });
-
-    el.filterChips.addEventListener("click", (e) => {
-      const chip = e.target.closest(".chip");
-      if (!chip) return;
-      document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
-      chip.classList.add("active");
-      state.filter = chip.dataset.filter;
-
-      renderList();
-    });
-
-    el.fabAdd.addEventListener("click", openSheet);
-    el.cancelAddBtn.addEventListener("click", closeSheet);
-    el.cancelEditBtn.addEventListener("click", closeEditSheet);
-    el.sheetOverlay.addEventListener("click", (e) => {
-      if (e.target === el.sheetOverlay) closeSheet();
-    });
-    el.editSheetOverlay.addEventListener("click", (e) => {
-      if (e.target === el.editSheetOverlay) closeEditSheet();
-    });
-    el.inputText.addEventListener("input", scheduleAutoTranslate);
-    el.editInputText.addEventListener("input", scheduleEditAutoTranslate);
-    el.retranslateBtn.addEventListener("click", () => autoTranslate(el.inputText.value, el.inputTranslation, el.translateStatus));
-    el.editRetranslateBtn.addEventListener("click", () => autoTranslate(el.editInputText.value, el.editInputTranslation, el.editTranslateStatus));
-    el.saveEntryBtn.addEventListener("click", saveNewEntry);
-    el.updateEntryBtn.addEventListener("click", updateEntry);
-
-    el.bottomNav.addEventListener("click", (e) => {
-      const btn = e.target.closest(".nav-item");
-      if (btn) switchView(btn.dataset.view);
-    });
-
-    el.rSpeakBtn.addEventListener("click", () => {
-      const e = state.reviewQueue[state.reviewIndex];
-      if (e) speak(e.text, el.rVoiceSelect);
-    });
-    el.rSkipBtn.addEventListener("click", () => {
-      haptic(10);
-      reviewNext();
-    });
-    el.rKnowBtn.addEventListener("click", markMastered);
-
-    const qualityButtons = [
-      {id: "quality0", quality: 0},
-      {id: "quality1", quality: 1},
-      {id: "quality2", quality: 2},
-      {id: "quality3", quality: 3},
-      {id: "quality4", quality: 4},
-      {id: "quality5", quality: 5},
-    ];
-    qualityButtons.forEach((btn) => {
-      const btnEl = document.getElementById(btn.id);
-      if (btnEl) btnEl.addEventListener("click", () => rateCurrentCard(btn.quality));
-    });
-
-    if (el.rVoiceSelect) el.rVoiceSelect.addEventListener("change", saveVoiceSettings);
-    if (el.voiceSelect) el.voiceSelect.addEventListener("change", saveVoiceSettings);
-
-    if (el.rateDown) el.rateDown.addEventListener("click", () => adjustRate(-1));
-    if (el.rateUp) el.rateUp.addEventListener("click", () => adjustRate(1));
-
-    if (el.exportBtn) el.exportBtn.addEventListener("click", exportBackup);
-    if (el.importFile) {
-      el.importFile.addEventListener("change", (e) => {
-        const file = e.target.files && e.target.files[0];
-        if (file) importBackup(file);
-        e.target.value = "";
-      });
-    }
-
-    initSwipe();
-
-    function adjustRate(direction) {
-      const newIndex = state.currentSpeechRateIndex + direction;
-      if (newIndex >= 0 && newIndex < state.speechRates.length) {
-        state.currentSpeechRateIndex = newIndex;
-        const rateNames = ["Slow", "Normal", "Fast"];
-        el.rateDisplay.textContent = rateNames[state.currentSpeechRateIndex];
-        localStorage.setItem("vocabNotebook.speechRateIndex", state.currentSpeechRateIndex);
-      }
-    }
-
-    try {
-      const savedTheme = localStorage.getItem(THEME_KEY);
-      if (savedTheme) applyTheme(savedTheme);
-
-      const savedRateIndex = localStorage.getItem("vocabNotebook.speechRateIndex");
-      if (savedRateIndex !== null) state.currentSpeechRateIndex = parseInt(savedRateIndex);
-
-      const rateNames = ["Slow", "Normal", "Fast"];
-      if (el.rateDisplay) el.rateDisplay.textContent = rateNames[state.currentSpeechRateIndex];
-    } catch (e) {}
-  }
-
   /** ------------ Initialization ------------ **/
   bindEvents();
   renderList();
 })();
 
-
-  /** ------------ Other Events ------------ **/
+/** ------------ Other Events ------------ **/
 document.querySelector(".hid-fab").addEventListener("click", () => {
   document.querySelector(".fab").style.display = "none";
 });

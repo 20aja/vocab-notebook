@@ -62,12 +62,14 @@
           <button class="chip" data-filter="fav">Favorates <i class="fa-solid fa-star"></i></button>
         </div>
 
-        <div class="entry-list" id="entryList"><!-- Filled dynamically --></div>
+        <div class="home-scroll-area">
+          <div class="entry-list" id="entryList"><!-- Filled dynamically --></div>
 
-        <div class="empty-state" id="emptyState">
-          <div class="empty-icon"><i class="fa-solid fa-book-open"></i></div>
-          <p>Start your English vocabulary journey!</p>
-          <p>Tap <b>+</b> to add your first word or sentence from anywhere.</p>
+          <div class="empty-state" id="emptyState">
+            <div class="empty-icon"><i class="fa-solid fa-book-open"></i></div>
+            <p>Start your English vocabulary journey!</p>
+            <p>Tap <b>+</b> to add your first word or sentence from anywhere.</p>
+          </div>
         </div>
       </section>
 
@@ -80,83 +82,106 @@
             <p>Add a few words first, or come back later for your next review.</p>
           </div>
 
-          <div class="rcard-stage" id="rcardStage">
-            <div class="swipe-hint swipe-hint-left"><i class="fa-solid fa-rotate-left"></i></div>
-            <div class="swipe-hint swipe-hint-right"><i class="fa-solid fa-circle-check"></i></div>
-            <div class="rcard" id="rcard">
-              <span class="rtag" id="rTag">Word</span>
-              <div class="rtext eng" id="rText">word</div>
-              <div class="rtrans" id="rTrans">translation</div>
-              <div class="rvoice-row">
-                <button class="voice-btn" id="rSpeakBtn"><i class="fa-solid fa-volume-high"></i> Listen</button>
-                <select id="rVoiceSelect" class="voice-select">
-                  <option value="default">Default voice</option>
-                </select>
-                <div class="voice-controls">
-                  <button class="mini-btn" id="rateDown" title="Slow down"><i class="fa-solid fa-backward-step"></i></button>
-                  <span class="rate-display" id="rateDisplay">Normal</span>
-                  <button class="mini-btn" id="rateUp" title="Speed up"><i class="fa-solid fa-forward-step"></i></button>
+          <div class="review-scroll-area">
+            <div class="review-summary" id="reviewSummary">
+              <div class="review-summary-row">
+                <div>
+                  <div class="review-summary-label">Due now</div>
+                  <div class="review-summary-value" id="reviewDueCount">0</div>
+                </div>
+                <div>
+                  <div class="review-summary-label">Next review</div>
+                  <div class="review-summary-value" id="nextReviewText">No upcoming reviews</div>
+                </div>
+              </div>
+              <div class="review-upcoming-list" id="reviewUpcomingList"></div>
+            </div>
+
+            <div class="rcard-stage" id="rcardStage">
+              <div class="swipe-hint swipe-hint-left"><i class="fa-solid fa-rotate-left"></i></div>
+              <div class="swipe-hint swipe-hint-right"><i class="fa-solid fa-circle-check"></i></div>
+              <div class="rcard" id="rcard">
+                <span class="rtag" id="rTag">Word</span>
+                <div class="rtext eng" id="rText">word</div>
+                <div class="rtrans" id="rTrans">translation</div>
+                <div class="rmeta" id="rMeta"></div>
+                <div class="rvoice-row">
+                  <button class="voice-btn" id="rSpeakBtn"><i class="fa-solid fa-volume-high"></i> Listen</button>
+                  <select id="rVoiceSelect" class="voice-select">
+                    <option value="default">Default voice</option>
+                  </select>
+                  <div class="voice-controls">
+                    <button class="mini-btn" id="rateDown" title="Slow down"><i class="fa-solid fa-backward-step"></i></button>
+                    <span class="rate-display" id="rateDisplay">Normal</span>
+                    <button class="mini-btn" id="rateUp" title="Speed up"><i class="fa-solid fa-forward-step"></i></button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          <p class="swipe-tip">Swipe the card — left for later, right for got it <i class="fa-solid fa-hand-pointer"></i></p>
+            <p class="swipe-tip">Swipe the card — left for later, right for got it <i class="fa-solid fa-hand-pointer"></i></p>
 
-          <div class="review-controls">
-            <button class="btn btn-review" id="rSkipBtn"><i class="fa-solid fa-rotate-left"></i> Later</button>
-            <button class="btn btn-know" id="rKnowBtn"><i class="fa-solid fa-circle-check"></i> Got it</button>
-          </div>
-
-          <!-- Quality buttons (0-5) for spaced repetition -->
-          <div class="quality-rating">
-            <div class="quality-label">How did that review go?</div>
-            <div class="quality-buttons">
-              <button class="quality-btn" id="quality0" title="Completely forgot"><i class="fa-solid fa-face-sad-tear"></i> Forgot</button>
-              <button class="quality-btn" id="quality1" title="Very hard"><i class="fa-solid fa-face-frown"></i> Hard</button>
-              <button class="quality-btn" id="quality2" title="Good recall"><i class="fa-solid fa-face-smile"></i> Good</button>
-              <button class="quality-btn" id="quality3" title="Excellent"><i class="fa-solid fa-face-grin-stars"></i> Great</button>
-              <button class="quality-btn" id="quality4" title="Easy"><i class="fa-solid fa-face-laugh-beam"></i> Easy</button>
-              <button class="quality-btn" id="quality5" title="Very easy"><i class="fa-solid fa-face-grin-wide"></i> Very easy</button>
+            <div class="review-controls">
+              <button class="btn btn-review" id="rSkipBtn"><i class="fa-solid fa-rotate-left"></i> Later</button>
+              <button class="btn btn-know" id="rKnowBtn"><i class="fa-solid fa-circle-check"></i> Got it</button>
             </div>
+
+            <div class="quality-rating">
+              <div class="quality-label">How did that review go?</div>
+              <div class="quality-buttons">
+                <button class="quality-btn" id="quality0" title="Completely forgot"><i class="fa-solid fa-face-sad-tear"></i> Forgot</button>
+                <button class="quality-btn" id="quality1" title="Very hard"><i class="fa-solid fa-face-frown"></i> Hard</button>
+                <button class="quality-btn" id="quality2" title="Good recall"><i class="fa-solid fa-face-smile"></i> Good</button>
+                <button class="quality-btn" id="quality3" title="Excellent"><i class="fa-solid fa-face-grin-stars"></i> Great</button>
+                <button class="quality-btn" id="quality4" title="Easy"><i class="fa-solid fa-face-laugh-beam"></i> Easy</button>
+                <button class="quality-btn" id="quality5" title="Very easy"><i class="fa-solid fa-face-grin-wide"></i> Very easy</button>
+              </div>
+            </div>
+            <div class="review-progress" id="reviewProgress"></div>
           </div>
-          <div class="review-progress" id="reviewProgress"></div>
         </div>
       </section>
 
       <!-- Stats tab -->
       <section class="view hidden" id="view-stats">
         <h2 class="section-title">Your progress</h2>
+        <div class="stats-body">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-card-num" id="sTotal">0</div>
+              <div class="stat-card-lbl">Total entries</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-card-num" id="sWords">0</div>
+              <div class="stat-card-lbl">Words</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-card-num" id="sSentences">0</div>
+              <div class="stat-card-lbl">Sentences</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-card-num" id="sFav">0</div>
+              <div class="stat-card-lbl">Favorites</div>
+            </div>
+            <div class="stat-card accent">
+              <div class="stat-card-num" id="sMastered">0</div>
+              <div class="stat-card-lbl">Mastered</div>
+            </div>
+            <div class="stat-card accent">
+              <div class="stat-card-num" id="sStreak">0</div>
+              <div class="stat-card-lbl">Day streak</div>
+            </div>
+          </div>
 
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-card-num" id="sTotal">0</div>
-            <div class="stat-card-lbl">Total entries</div>
+          <h3 class="section-subtitle">Added this week</h3>
+          <div class="chart-card">
+            <div class="bar-chart" id="barChart"><!-- Filled dynamically --></div>
           </div>
-          <div class="stat-card">
-            <div class="stat-card-num" id="sWords">0</div>
-            <div class="stat-card-lbl">Words</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-card-num" id="sSentences">0</div>
-            <div class="stat-card-lbl">Sentences</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-card-num" id="sFav">0</div>
-            <div class="stat-card-lbl">Favorites</div>
-          </div>
-          <div class="stat-card accent">
-            <div class="stat-card-num" id="sMastered">0</div>
-            <div class="stat-card-lbl">Mastered</div>
-          </div>
-          <div class="stat-card accent">
-            <div class="stat-card-num" id="sStreak">0</div>
-            <div class="stat-card-lbl">Day streak</div>
-          </div>
-        </div>
 
-        <h3 class="section-subtitle">Added this week</h3>
-        <div class="chart-card">
-          <div class="bar-chart" id="barChart"><!-- Filled dynamically --></div>
+          <div class="backup-actions">
+            <button class="btn btn-secondary" id="exportBtn"><i class="fa-solid fa-file-arrow-down"></i> Export backup</button>
+            <label class="btn btn-secondary" for="importFile"><i class="fa-solid fa-file-arrow-up"></i> Import backup</label>
+            <input type="file" id="importFile" accept="application/json" hidden />
+          </div>
         </div>
       </section>
 
@@ -179,7 +204,12 @@
           <h2 id="sheetTitle">Add new</h2>
 
           <label class="field-label">Word or sentence (English)</label>
-          <textarea id="inputText" rows="2" placeholder="Type or paste the word or sentence…"></textarea>
+          <div class="voice-input-row">
+            <textarea id="inputText" rows="2" placeholder="Type or paste the word or sentence…"></textarea>
+            <button class="voice-input-btn" id="voiceInputBtn" type="button" title="Speak your word or sentence">
+              <i class="fa-solid fa-microphone"></i>
+            </button>
+          </div>
 
           <div class="type-selector">
             <label class="field-label">Type:</label>
@@ -198,6 +228,21 @@
           <div class="voice-selector">
             <label class="field-label">Choose a voice:</label>
             <select id="voiceSelect" class="voice-select"></select>
+          </div>
+
+          <div class="tags-selector">
+            <label class="field-label">Tags (comma separated)</label>
+            <input type="text" id="tagsInput" placeholder="e.g. business, food, travel" />
+          </div>
+
+          <div class="source-selector">
+            <label class="field-label">Lesson / source</label>
+            <input type="text" id="sourceInput" placeholder="Video link or lesson name" />
+          </div>
+
+          <div class="notes-selector">
+            <label class="field-label">Notes or example</label>
+            <textarea id="notesInput" rows="2" placeholder="Add a note or example sentence…"></textarea>
           </div>
 
           <label class="field-label">
@@ -240,6 +285,21 @@
           <div class="voice-selector">
             <label class="field-label">Choose a voice:</label>
             <select id="editVoiceSelect" class="voice-select"></select>
+          </div>
+
+          <div class="tags-selector">
+            <label class="field-label">Tags (comma separated)</label>
+            <input type="text" id="editTagsInput" placeholder="e.g. business, food, travel" />
+          </div>
+
+          <div class="source-selector">
+            <label class="field-label">Lesson / source</label>
+            <input type="text" id="editSourceInput" placeholder="Video link or lesson name" />
+          </div>
+
+          <div class="notes-selector">
+            <label class="field-label">Notes or example</label>
+            <textarea id="editNotesInput" rows="2" placeholder="Add a note or example sentence…"></textarea>
           </div>
 
           <label class="field-label">
