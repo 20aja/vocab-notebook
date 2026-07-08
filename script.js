@@ -215,10 +215,7 @@
     if (!text.trim()) return;
     targetStatus.textContent = "Translating…";
     try {
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|ar`;
-      const res = await fetch(url);
-      const data = await res.json();
-      const translated = data && data.responseData && data.responseData.translatedText;
+      const translated = await fetchAutoTranslation(text);
       if (translated) {
         targetInput.value = translated;
         targetStatus.textContent = "Translated automatically ✓ feel free to edit it";
@@ -228,6 +225,50 @@
     } catch (e) {
       targetStatus.textContent = "No internet connection — enter the translation manually.";
     }
+  }
+
+  async function fetchAutoTranslation(text) {
+    const cleaned = text.trim();
+
+    async function tryGoogle() {
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(cleaned)}`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!Array.isArray(data) || !Array.isArray(data[0])) return null;
+      return data[0].map((item) => item[0]).join("");
+    }
+
+    async function tryMyMemory() {
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleaned)}&langpair=en|ar`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data?.responseData?.translatedText || null;
+    }
+
+    async function safeTranslate(fn) {
+      try {
+        return await fn();
+      } catch (e) {
+        return null;
+      }
+    }
+
+    const candidates = [tryGoogle, tryMyMemory];
+    let bestResult = null;
+    for (const candidate of candidates) {
+      const result = await safeTranslate(candidate);
+      if (!result) continue;
+      if (looksLikeArabic(result)) return result;
+      if (!bestResult) bestResult = result;
+    }
+
+    return bestResult;
+  }
+
+  function looksLikeArabic(text) {
+    return /[\u0600-\u06FF]/.test(text);
   }
 
   function scheduleAutoTranslate() {
