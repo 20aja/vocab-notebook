@@ -288,43 +288,81 @@
     translateTimer = setTimeout(() => autoTranslate(text, el.editInputTranslation, el.editTranslateStatus), 700);
   }
 
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition || window.msSpeechRecognition;
+  function getNativeSTT() {
+    return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SpeechRecognition;
+  }
+
+  const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition || window.msSpeechRecognition;
   let recognition = null;
   let isListening = false;
 
+  function setListeningUI(listening) {
+    isListening = listening;
+    if (!el.voiceInputBtn) return;
+    if (listening) {
+      el.voiceInputBtn.classList.add("listening");
+      el.voiceInputBtn.title = "Listening... tap to stop";
+    } else {
+      el.voiceInputBtn.classList.remove("listening");
+      el.voiceInputBtn.title = "Speak your word or sentence";
+    }
+  }
+
+  function handleTranscript(transcript) {
+    transcript = (transcript || "").trim();
+    if (transcript) {
+      el.inputText.value = transcript;
+      scheduleAutoTranslate();
+      toast("Voice captured ✓ edit if needed");
+    }
+  }
+
+  // Native voice input via @capacitor-community/speech-recognition — uses the
+  // phone's real speech engine, works reliably inside the packaged app (unlike the
+  // browser Web Speech API below, which WebView usually doesn't support at all).
+  async function startNativeVoiceInput(nativeSTT) {
+    try {
+      const {available} = await nativeSTT.available();
+      if (!available) {
+        toast("Voice input is not available on this device.");
+        return;
+      }
+      const perm = await nativeSTT.checkPermissions();
+      if (perm.speechRecognition !== "granted") {
+        const req = await nativeSTT.requestPermissions();
+        if (req.speechRecognition !== "granted") {
+          toast("Microphone access denied.");
+          return;
+        }
+      }
+      setListeningUI(true);
+      const result = await nativeSTT.start({
+        language: "en-US",
+        maxResults: 1,
+        prompt: "Say your word or sentence",
+        partialResults: false,
+        popup: false,
+      });
+      setListeningUI(false);
+      const transcript = result && result.matches && result.matches[0];
+      handleTranscript(transcript);
+    } catch (e) {
+      setListeningUI(false);
+      toast("Voice input is not available right now.");
+    }
+  }
+
   function initSpeechRecognition() {
-    if (!SpeechRecognition || recognition) return;
-    recognition = new SpeechRecognition();
+    if (!SpeechRecognitionAPI || recognition) return;
+    recognition = new SpeechRecognitionAPI();
     recognition.lang = "en-US";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.continuous = false;
 
-    recognition.onstart = () => {
-      isListening = true;
-      if (el.voiceInputBtn) {
-        el.voiceInputBtn.classList.add("listening");
-        el.voiceInputBtn.title = "Listening... tap to stop";
-      }
-    };
-
-    recognition.onend = () => {
-      isListening = false;
-      if (el.voiceInputBtn) {
-        el.voiceInputBtn.classList.remove("listening");
-        el.voiceInputBtn.title = "Speak your word or sentence";
-      }
-    };
-
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript.trim();
-      if (transcript) {
-        el.inputText.value = transcript;
-        scheduleAutoTranslate();
-        toast("Voice captured ✓ edit if needed");
-      }
-    };
-
+    recognition.onstart = () => setListeningUI(true);
+    recognition.onend = () => setListeningUI(false);
+    recognition.onresult = (event) => handleTranscript(event.results[0][0].transcript);
     recognition.onerror = (event) => {
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
         toast("Microphone access denied.");
@@ -335,7 +373,19 @@
   }
 
   function toggleVoiceInput() {
-    if (!SpeechRecognition) {
+    const nativeSTT = getNativeSTT();
+
+    if (nativeSTT) {
+      if (isListening) {
+        nativeSTT.stop().catch(() => {});
+        setListeningUI(false);
+        return;
+      }
+      startNativeVoiceInput(nativeSTT);
+      return;
+    }
+
+    if (!SpeechRecognitionAPI) {
       toast("Voice input is not supported in this browser.");
       return;
     }
@@ -356,13 +406,53 @@
   }
 
   /** ------------ Multi-voice speech ------------ **/
+  function getNativeTTS() {
+    return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TextToSpeech;
+  }
+
   function loadVoices() {
+    const nativeTTS = getNativeTTS();
+    if (nativeTTS && typeof nativeTTS.getSupportedVoices === "function") {
+      loadNativeVoiceList(nativeTTS);
+      return;
+    }
     if (!("speechSynthesis" in window)) return;
     if (window.speechSynthesis.onvoiceschanged !== undefined) {
       window.speechSynthesis.onvoiceschanged = populateVoiceLists;
     }
     setTimeout(populateVoiceLists, 200);
     setTimeout(populateVoiceLists, 500);
+  }
+
+  // Reads the real device voices from the native TTS engine (through the Capacitor
+  // plugin) so the dropdown shows whatever voices are actually installed on this phone.
+  function loadNativeVoiceList(nativeTTS) {
+    nativeTTS
+      .getSupportedVoices()
+      .then((result) => {
+        const rawVoices = (result && result.voices) || [];
+        const enVoices = [];
+        rawVoices.forEach((v, i) => {
+          if (v.lang && v.lang.toLowerCase().startsWith("en")) {
+            enVoices.push({name: v.name || `Voice ${i + 1}`, lang: v.lang, nativeIndex: i});
+          }
+        });
+        state.voices = {
+          all: enVoices,
+          us: enVoices.filter((v) => v.lang.toLowerCase().startsWith("en-us")),
+          uk: enVoices.filter((v) => v.lang.toLowerCase().startsWith("en-gb")),
+          au: enVoices.filter((v) => v.lang.toLowerCase().startsWith("en-au")),
+          other: enVoices.filter(
+            (v) => !v.lang.toLowerCase().startsWith("en-us") && !v.lang.toLowerCase().startsWith("en-gb") && !v.lang.toLowerCase().startsWith("en-au")
+          ),
+        };
+        updateVoiceSelectUI(el.voiceSelect);
+        updateVoiceSelectUI(el.rVoiceSelect);
+        applySavedVoiceSettings();
+      })
+      .catch(() => {
+        /* leave "Default voice" only — device didn't return a voice list */
+      });
   }
 
   function populateVoiceLists() {
@@ -461,23 +551,60 @@
     }
   }
 
+  // Native TTS via the official @capacitor-community/text-to-speech plugin.
+  // Capacitor auto-exposes installed plugins at window.Capacitor.Plugins — no import/
+  // bundler needed. This calls Android's real TextToSpeech engine directly, fully
+  // bypassing WebView's broken audio/speechSynthesis support. When this app is opened
+  // in a plain browser (no Capacitor runtime), it falls through to the old behavior.
+  let isSpeaking = false;
+  function resetIcon() {
+    isSpeaking = false;
+    if (el.rSpeakBtn) el.rSpeakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i> Listen';
+  }
+  function setSpeakingIcon() {
+    isSpeaking = true;
+    if (el.rSpeakBtn) el.rSpeakBtn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop';
+  }
+
+  function stopSpeaking() {
+    const nativeTTS = getNativeTTS();
+    if (nativeTTS && typeof nativeTTS.stop === "function") nativeTTS.stop();
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    if (cloudTTSAudio) {
+      cloudTTSAudio.pause();
+      cloudTTSAudio = null;
+    }
+    resetIcon();
+  }
+
   function speak(text, voiceSelectEl) {
     const selectEl = voiceSelectEl || el.rVoiceSelect;
     const selectedVoice = getVoiceFromSelect(selectEl);
     const lang = selectedVoice ? selectedVoice.lang : "en-US";
+    const rate = state.speechRates[state.currentSpeechRateIndex];
 
-    const resetIcon = () => {
-      if (el.rSpeakBtn) el.rSpeakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i> Listen';
-    };
-    const setSpeaking = () => {
-      if (el.rSpeakBtn) el.rSpeakBtn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop';
-    };
+    const nativeTTS = getNativeTTS();
+    if (nativeTTS) {
+      setSpeakingIcon();
+      const options = {text, lang, rate, pitch: 1.0, volume: 1.0, category: "ambient"};
+      if (selectedVoice && typeof selectedVoice.nativeIndex === "number") {
+        options.voice = selectedVoice.nativeIndex;
+      }
+      nativeTTS
+        .speak(options)
+        .then(resetIcon)
+        .catch(() => {
+          resetIcon();
+          speakViaCloudTTS(text, lang, setSpeakingIcon, resetIcon);
+        });
+      return;
+    }
 
     const hasBrowserVoices = "speechSynthesis" in window && window.speechSynthesis.getVoices().length > 0;
 
     if (!hasBrowserVoices) {
       // No usable native voices (typical inside a packaged APK/WebView) — use cloud fallback directly.
-      speakViaCloudTTS(text, lang, setSpeaking, resetIcon);
+      speakViaCloudTTS(text, lang, setSpeakingIcon, resetIcon);
       return;
     }
 
@@ -489,14 +616,14 @@
     } else {
       utter.lang = "en-US";
     }
-    utter.rate = state.speechRates[state.currentSpeechRateIndex];
+    utter.rate = rate;
     utter.pitch = 1;
     utter.volume = 1;
-    utter.onstart = setSpeaking;
+    utter.onstart = setSpeakingIcon;
     utter.onend = resetIcon;
     utter.onerror = () => {
       // Native speech failed to actually speak (common in WebView) — fall back to cloud TTS.
-      speakViaCloudTTS(text, lang, setSpeaking, resetIcon);
+      speakViaCloudTTS(text, lang, setSpeakingIcon, resetIcon);
     };
     window.speechSynthesis.speak(utter);
 
@@ -505,12 +632,12 @@
     setTimeout(() => {
       if (!window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
-        speakViaCloudTTS(text, lang, setSpeaking, resetIcon);
+        speakViaCloudTTS(text, lang, setSpeakingIcon, resetIcon);
       }
     }, 400);
   }
 
-  if ("speechSynthesis" in window) loadVoices();
+  loadVoices();
 
   /** ------------ Toast notifications (optionally with an action button) ------------ **/
   let toastTimer = null;
@@ -1126,6 +1253,10 @@
     });
 
     el.rSpeakBtn.addEventListener("click", () => {
+      if (isSpeaking) {
+        stopSpeaking();
+        return;
+      }
       const e = state.reviewQueue[state.reviewIndex];
       if (e) speak(e.text, el.rVoiceSelect);
     });
